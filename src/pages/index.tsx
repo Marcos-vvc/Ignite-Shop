@@ -9,23 +9,41 @@ import 'keen-slider/keen-slider.min.css'
 import { GetStaticProps } from 'next'
 import { stripe } from '../lib/stripe'
 import Stripe from 'stripe'
+import { CartButton } from '@/components/CartButton'
+import { useCart } from '../hooks/useCart'
+import { IProduct } from '@/contexts/CartContext'
+import { MouseEvent, useEffect, useState } from 'react'
+import { ProductSkeleton } from '@/components/ProductSkeleton'
 
 interface HomeProps {
-  products: {
-    id: string
-    name: string
-    imageUrl: string
-    price: string
-  }[]
+  products: IProduct[]
 }
 
 export default function Home({ products }: HomeProps) {
+  const { addToCart, checkIfItemAlreadyExists } = useCart()
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    // fake loading to use the skeleton loading from figma
+    const timeOut = setTimeout(() => setIsLoading(false), 2000)
+
+    return () => clearTimeout(timeOut)
+  }, [])
+
   const [sliderRef] = useKeenSlider({
     slides: {
-      perView: 3,
+      perView: 'auto',
       spacing: 48,
     },
   })
+
+  function handleAddToCart(
+    e: MouseEvent<HTMLButtonElement>,
+    product: IProduct,
+  ) {
+    e.preventDefault()
+    addToCart(product)
+  }
 
   return (
     <>
@@ -34,24 +52,50 @@ export default function Home({ products }: HomeProps) {
       </Head>
 
       <HomeContainer ref={sliderRef} className="keen-slider">
-        {products.map((product) => {
-          return (
-            <Link
-              href={`/product/${product.id}`}
-              key={product.id}
-              prefetch={false}
-            >
-              <Product className="keen-slider__slide">
-                <Image src={product.imageUrl} alt="" width={520} height={480} />
+        {isLoading ? (
+          <>
+            <ProductSkeleton className="keen-slider__slide" />
+            <ProductSkeleton className="keen-slider__slide" />
+            <ProductSkeleton className="keen-slider__slide" />
+          </>
+        ) : (
+          <>
+            {products.map((product) => {
+              return (
+                <Link
+                  key={product.id}
+                  href={`/product/${product.id}`}
+                  prefetch={false}
+                >
+                  <Product
+                    className="keen-slider__slide"
+                    style={{ minWidth: 696 }}
+                  >
+                    <Image
+                      src={product.imageUrl}
+                      alt=""
+                      width={520}
+                      height={480}
+                    />
 
-                <footer>
-                  <strong>{product.name}</strong>
-                  <span>{product.price}</span>
-                </footer>
-              </Product>
-            </Link>
-          )
-        })}
+                    <footer>
+                      <div>
+                        <strong>{product.name}</strong>
+                        <span>{product.price}</span>
+                      </div>
+                      <CartButton
+                        color="green"
+                        size="large"
+                        disabled={checkIfItemAlreadyExists(product.id)}
+                        onClick={(e) => handleAddToCart(e, product)}
+                      />
+                    </footer>
+                  </Product>
+                </Link>
+              )
+            })}
+          </>
+        )}
       </HomeContainer>
     </>
   )
@@ -73,6 +117,8 @@ export const getStaticProps: GetStaticProps = async () => {
         style: 'currency',
         currency: 'BRL',
       }).format((price.unit_amount || 0) / 100),
+      numberPrice: price.unit_amount / 100,
+      defaultPriceId: price.id,
     }
   })
 
